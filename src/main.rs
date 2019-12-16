@@ -6,6 +6,7 @@ extern crate ini;
 
 mod config;
 mod generator;
+mod setup;
 
 use self::config::Config;
 use std::fmt;

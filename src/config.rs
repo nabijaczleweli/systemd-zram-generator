@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: MIT */
 
 use crate::generator::run_generator;
+use crate::setup::run_device_setup;
 use crate::ResultExt;
 use failure::Error;
 use ini::Ini;
@@ -133,7 +134,7 @@ impl Config {
     pub fn run(self) -> Result<(), Error> {
         match self.module {
             ModuleConfig::Generator { output_directory } => run_generator(self.root, self.devices, output_directory),
-            ModuleConfig::DeviceSetup { name } => unimplemented!("setting up for {}", name),
+            ModuleConfig::DeviceSetup { name } => run_device_setup(self.root, self.devices, name),
         }
     }
 }
