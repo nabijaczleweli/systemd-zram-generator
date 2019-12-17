@@ -33,6 +33,11 @@ fn virtualization_container() -> Result<bool, Error> {
 
 
 pub fn run_generator(root: Cow<'static, str>, devices: Vec<Device>, output_directory: PathBuf) -> Result<(), Error> {
+    if devices.is_empty() {
+       println!("No devices configured, exiting.");
+       return Ok(());
+    }
+
     if virtualization_container()? {
         println!("Running in a container, exiting.");
         return Ok(());

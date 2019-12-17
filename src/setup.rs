@@ -10,8 +10,8 @@ use std::path::Path;
 use std::process::Command;
 
 
-pub fn run_device_setup(root: Cow<'static, str>, devices: Vec<Device>, device_name: String) -> Result<(), Error> {
-    let device = devices.into_iter().find(|dev| dev.name == device_name).ok_or_else(|| format_err!("Device {} not found", device_name))?;
+pub fn run_device_setup(root: Cow<'static, str>, device: Option<Device>, device_name: String) -> Result<(), Error> {
+    let device = device.ok_or_else(|| format_err!("Device {} not found", device_name))?;
 
     let device_sysfs_path = Path::new(&root[..]).join("sys/block/").join(&device_name);
     let disksize_path = device_sysfs_path.join("disksize");
