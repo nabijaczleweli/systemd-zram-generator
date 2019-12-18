@@ -17,6 +17,7 @@ pub struct Device {
     pub name: String,
     pub memory_limit_mb: u64,
     pub zram_fraction: f64,
+    pub compression_algorithm: Option<String>,
     pub disksize: u64,
 }
 
@@ -26,6 +27,7 @@ impl Device {
             name,
             memory_limit_mb: 2 * 1024,
             zram_fraction: 0.25,
+            compression_algorithm: None,
             disksize: 0,
         }
     }
@@ -115,7 +117,7 @@ impl Config {
         Ok(Ini::load_from_file(&path).with_path(&path)?.into_iter())
     }
 
-    fn parse_device(section_name: Option<String>, section: IniProperties, memtotal_mb: f64) -> Result<Option<Device>, Error> {
+    fn parse_device(section_name: Option<String>, mut section: IniProperties, memtotal_mb: f64) -> Result<Option<Device>, Error> {
         let section_name = section_name.map(Cow::Owned).unwrap_or(Cow::Borrowed("(no title)"));
 
         if !section_name.starts_with("zram") {
@@ -139,8 +141,12 @@ impl Config {
                 .map_err(|e| format_err!("Failed to parse zram-fraction \"{}\": {}", val, e))?;
         }
 
-        println!("Found configuration for {}: memory-limit={}MB zram-fraction={}",
-                 dev.name, dev.memory_limit_mb, dev.zram_fraction);
+        if let Some((_, val)) = section.remove_entry("compression-algorithm") {
+            dev.compression_algorithm = Some(val);
+        }
+
+        println!("Found configuration for {}: memory-limit={}MB zram-fraction={} compression-algorithm={}",
+                 dev.name, dev.memory_limit_mb, dev.zram_fraction, dev.compression_algorithm.as_ref().map(String::as_str).unwrap_or("<default>"));
 
         if memtotal_mb > dev.memory_limit_mb as f64 {
             println!("{}: system has too much memory ({:.1}MB), limit is {}MB, ignoring.",

@@ -14,6 +14,12 @@ pub fn run_device_setup(root: Cow<'static, str>, device: Option<Device>, device_
     let device = device.ok_or_else(|| format_err!("Device {} not found", device_name))?;
 
     let device_sysfs_path = Path::new(&root[..]).join("sys/block/").join(&device_name);
+
+    if let Some(compression_algorithm) = device.compression_algorithm {
+        let comp_algorithm_path = device_sysfs_path.join("comp_algorithm");
+        fs::write(&comp_algorithm_path, compression_algorithm).with_path(comp_algorithm_path)?;
+    }
+
     let disksize_path = device_sysfs_path.join("disksize");
     fs::write(&disksize_path, format!("{}", device.disksize)).with_path(disksize_path)?;
 
