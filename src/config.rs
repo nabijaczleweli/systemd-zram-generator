@@ -6,6 +6,7 @@ use crate::ResultExt;
 use failure::Error;
 use ini::ini::{Ini, Properties as IniProperties, SectionIntoIter};
 use std::borrow::Cow;
+use std::cmp;
 use std::env;
 use std::fmt;
 use std::fs;
@@ -18,6 +19,7 @@ pub struct Device {
     pub name: String,
     pub host_memory_limit_mb: Option<u64>,
     pub zram_fraction: f64,
+    pub max_zram_size_mb: Option<u64>,
     pub compression_algorithm: Option<String>,
     pub disksize: u64,
 }
@@ -28,23 +30,31 @@ impl Device {
             name,
             host_memory_limit_mb: Some(2 * 1024),
             zram_fraction: 0.25,
+            max_zram_size_mb: Some(4 * 1024),
             compression_algorithm: None,
             disksize: 0,
         }
+    }
+
+    fn write_optional_mb(f: &mut fmt::Formatter<'_>, val: Option<u64>) -> fmt::Result {
+        match val {
+            Some(val) => {
+                write!(f, "{}", val)?;
+                f.write_str("MB")?;
+            }
+            None => f.write_str("<none>")?,
+        }
+        Ok(())
     }
 }
 
 impl fmt::Display for Device {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}: host-memory-limit=", self.name)?;
-        match self.host_memory_limit_mb {
-            Some(limit) => {
-                write!(f, "{}", limit)?;
-                f.write_str("MB")?;
-            }
-            None => f.write_str("<none>")?,
-        }
-        write!(f, " zram-fraction={} compression-algorithm=", self.zram_fraction)?;
+        Device::write_optional_mb(f, self.host_memory_limit_mb)?;
+        write!(f, " zram-fraction={} max-zram-size=", self.zram_fraction)?;
+        Device::write_optional_mb(f, self.max_zram_size_mb)?;
+        f.write_str(" compression-algorithm=")?;
         match self.compression_algorithm.as_ref() {
             Some(alg) => f.write_str(alg)?,
             None => f.write_str("<default>")?,
@@ -137,6 +147,14 @@ impl Config {
         Ok(Ini::load_from_file(&path).with_path(&path)?.into_iter())
     }
 
+    fn parse_optional_size(val: &str) -> Result<Option<u64>, Error> {
+        Ok(if val == "none" {
+            None
+        } else {
+            Some(val.parse().map_err(|e| format_err!("Failed to parse host-memory-limit \"{}\": {}", val, e))?)
+        })
+    }
+
     fn parse_device(section_name: Option<String>, mut section: IniProperties, memtotal_mb: f64) -> Result<Option<Device>, Error> {
         let section_name = section_name.map(Cow::Owned).unwrap_or(Cow::Borrowed("(no title)"));
 
@@ -148,17 +166,16 @@ impl Config {
         let mut dev = Device::new(section_name.into_owned());
 
         if let Some(val) = section.get("host-memory-limit") {
-            if val == "none" {
-                dev.host_memory_limit_mb = None;
-            } else {
-                dev.host_memory_limit_mb = Some(val.parse()
-                    .map_err(|e| format_err!("Failed to parse host-memory-limit \"{}\": {}", val, e))?);
-            }
+            dev.host_memory_limit_mb = Config::parse_optional_size(val)?;
         }
 
         if let Some(val) = section.get("zram-fraction") {
             dev.zram_fraction = val.parse()
                 .map_err(|e| format_err!("Failed to parse zram-fraction \"{}\": {}", val, e))?;
+        }
+
+        if let Some(val) = section.get("max-zram-size") {
+            dev.max_zram_size_mb = Config::parse_optional_size(val)?;
         }
 
         if let Some((_, val)) = section.remove_entry("compression-algorithm") {
@@ -170,13 +187,14 @@ impl Config {
         match dev.host_memory_limit_mb {
             Some(limit) if memtotal_mb > limit as f64 => {
                 println!("{}: system has too much memory ({:.1}MB), limit is {}MB, ignoring.",
-                         dev.name,
-                         memtotal_mb,
-                         limit);
+                         dev.name, memtotal_mb, limit);
                 Ok(None)
             }
             _ => {
                 dev.disksize = (dev.zram_fraction * memtotal_mb) as u64 * 1024 * 1024;
+                if let Some(max_mb) = dev.max_zram_size_mb {
+                    dev.disksize = cmp::min(dev.disksize, max_mb * 1024 * 1024);
+                }
                 Ok(Some(dev))
             }
         }
