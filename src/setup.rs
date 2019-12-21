@@ -5,6 +5,7 @@ use crate::ResultExt;
 use failure::Error;
 use std::borrow::Cow;
 use std::fs;
+use std::io::ErrorKind;
 use std::os::unix::process::ExitStatusExt;
 use std::path::Path;
 use std::process::Command;
@@ -17,7 +18,14 @@ pub fn run_device_setup(root: Cow<'static, str>, device: Option<Device>, device_
 
     if let Some(compression_algorithm) = device.compression_algorithm {
         let comp_algorithm_path = device_sysfs_path.join("comp_algorithm");
-        fs::write(&comp_algorithm_path, compression_algorithm).with_path(comp_algorithm_path)?;
+        match fs::write(&comp_algorithm_path, &compression_algorithm) {
+            Ok(_) => {}
+            Err(err) if err.kind() == ErrorKind::InvalidInput => {
+                println!("Warning: algorithm {:?} not recognised; consult {} for a list of available ones",
+                         compression_algorithm, comp_algorithm_path.display());
+            }
+            err @ Err(_) => err.with_path(comp_algorithm_path)?,
+        }
     }
 
     let disksize_path = device_sysfs_path.join("disksize");

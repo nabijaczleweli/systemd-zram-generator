@@ -123,7 +123,7 @@ impl Config {
     fn read_device(root: &str, name: &str) -> Result<Option<Device>, Error> {
         match Config::read_devices(root)?.find(|(section_name, _)| section_name.as_ref().map(String::as_str) == Some(name)) {
             Some((section_name, section)) => {
-                let memtotal_mb = get_total_memory_kb(&root)? as f64 / 1024.;
+                let memtotal_mb = get_total_memory_kb(root)? as f64 / 1024.;
 
                 Config::parse_device(section_name, section, memtotal_mb)
             }
@@ -132,7 +132,7 @@ impl Config {
     }
 
     fn read_all_devices(root: &str) -> Result<Vec<Device>, Error> {
-        let memtotal_mb = get_total_memory_kb(&root)? as f64 / 1024.;
+        let memtotal_mb = get_total_memory_kb(root)? as f64 / 1024.;
 
         Result::from_iter(Config::read_devices(root)?.map(|(sn, s)| Config::parse_device(sn, s, memtotal_mb)).map(Result::transpose).flatten())
     }
