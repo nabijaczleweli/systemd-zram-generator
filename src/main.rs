@@ -52,10 +52,6 @@ fn main() -> Result<()> {
     } else {
         let devices = config::read_all_devices(&root)?;
         let output_directory = PathBuf::from(opts.arg);
-        Ok(generator::run_generator(
-            &root,
-            &devices,
-            &output_directory,
-        )?)
+        Ok(generator::run_generator(&devices, &output_directory)?)
     }
 }
