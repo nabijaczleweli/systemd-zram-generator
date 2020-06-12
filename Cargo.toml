@@ -9,6 +9,7 @@ edition = "2018"
 
 [dependencies]
 anyhow = "1"
+gag = "0.1"
 rust-ini = "0.13"
 structopt = "0.3"
 

@@ -7,6 +7,7 @@ mod setup;
 use anyhow::{anyhow, Result};
 use std::borrow::Cow;
 use std::env;
+use std::fs::OpenOptions;
 use std::path::{Path, PathBuf};
 use structopt::StructOpt;
 
@@ -23,7 +24,7 @@ struct Opts {
 
 fn get_opts() -> Result<Opts> {
     let opts = Opts::from_args();
-    println!("{:?}", opts);
+    println!("<7>zram-generator: {:?}", opts);
 
     if opts.setup_device && !opts.extra.is_empty() {
         return Err(anyhow!("--setup-device accepts exactly one argument"));
@@ -37,6 +38,12 @@ fn get_opts() -> Result<Opts> {
 }
 
 fn main() -> Result<()> {
+    let _kmsg = OpenOptions::new()
+        .write(true)
+        .open("/dev/kmsg")
+        .and_then(|f| gag::Redirect::stdout(f).map_err(|e| e.error))
+        .map_err(|e| println!("Redirection to /dev/kmsg failed: {}", e));
+
     let root: Cow<'static, str> = match env::var("ZRAM_GENERATOR_ROOT") {
         Ok(val) => val.into(),
         Err(env::VarError::NotPresent) => "/".into(),
