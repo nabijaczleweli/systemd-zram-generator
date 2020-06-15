@@ -24,6 +24,7 @@ fn make_symlink(dst: &str, src: &Path) -> Result<()> {
 
 fn virtualization_container() -> Result<bool> {
     match Command::new("systemd-detect-virt")
+        .arg("--quiet")
         .arg("--container")
         .stdout(Stdio::null())
         .status()
