@@ -163,11 +163,32 @@ fn write_contents(output_directory: &Path, filename: &str, contents: &str) -> Re
 }
 
 fn handle_device(output_directory: &Path, device: &Device) -> Result<()> {
+    handle_zram_writeback(output_directory, device)?;
     if device.is_swap() {
         handle_zram_swap(output_directory, device)
     } else {
         handle_zram_mount_point(output_directory, device)
     }
+}
+
+fn handle_zram_writeback(output_directory: &Path, device: &Device) -> Result<()> {
+    if let Some(ref wb_dev) = device.writeback_dev {
+        write_contents(
+            output_directory,
+            &format!(
+                "systemd-zram-setup@{}.service.d/bindsto-writeback.conf",
+                device.name
+            ),
+            &format!(
+                "\
+[Unit]
+BindsTo={}.device
+",
+                mount_unit_name(wb_dev, "")
+            ),
+        )?;
+    }
+    Ok(())
 }
 
 fn handle_zram_swap(output_directory: &Path, device: &Device) -> Result<()> {
@@ -228,14 +249,14 @@ Options={options}
 /// Path escaping as described in systemd.unit(5)
 ///
 /// `/./` components stripped away when parsing `mount-point =`
-fn mount_unit_name(path: &Path) -> String {
+fn mount_unit_name(path: &Path, suffix: &str) -> String {
     assert!(path.is_absolute());
 
     let trimmed = path.to_str().unwrap().trim_matches('/');
     if trimmed.is_empty() {
-        "-.mount".to_string()
+        format!("-{}", suffix)
     } else {
-        let mut obuf = Vec::with_capacity(path.as_os_str().len() + ".mount".len());
+        let mut obuf = Vec::with_capacity(path.as_os_str().len() + suffix.len());
         let mut just_slash = false;
         for (i, &b) in trimmed.as_bytes().iter().enumerate() {
             if b == b'/' && just_slash {
@@ -249,7 +270,7 @@ fn mount_unit_name(path: &Path) -> String {
                 _ => write!(obuf, "\\x{:02x}", b).unwrap(),
             }
         }
-        obuf.extend_from_slice(b".mount");
+        obuf.extend_from_slice(suffix.as_bytes());
         String::from_utf8(obuf).unwrap()
     }
 }
@@ -260,7 +281,7 @@ fn handle_zram_mount_point(output_directory: &Path, device: &Device) -> Result<(
         return Ok(());
     }
 
-    let mount_name = &mount_unit_name(device.mount_point.as_ref().unwrap());
+    let mount_name = &mount_unit_name(device.mount_point.as_ref().unwrap(), ".mount");
 
     debug!(
         "Creating unit file {} (/dev/{} with {}MB)",
@@ -370,21 +391,24 @@ type         : skcipher
 
     #[test]
     fn test_mount_unit_name() {
-        assert_eq!(mount_unit_name(&Path::new("/waldo")), "waldo.mount");
         assert_eq!(
-            mount_unit_name(&Path::new("/waldo/quuix")),
+            mount_unit_name(&Path::new("/waldo"), ".mount"),
+            "waldo.mount"
+        );
+        assert_eq!(
+            mount_unit_name(&Path::new("/waldo/quuix"), ".mount"),
             "waldo-quuix.mount"
         );
         assert_eq!(
-            mount_unit_name(&Path::new("/waldo/quuix/")),
+            mount_unit_name(&Path::new("/waldo/quuix/"), ".mount"),
             "waldo-quuix.mount"
         );
         assert_eq!(
-            mount_unit_name(&Path::new("/waldo/quuix//")),
+            mount_unit_name(&Path::new("/waldo/quuix//"), ".mount"),
             "waldo-quuix.mount"
         );
-        assert_eq!(mount_unit_name(&Path::new("/")), "-.mount");
-        assert_eq!(mount_unit_name(&Path::new("//")), "-.mount");
-        assert_eq!(mount_unit_name(&Path::new("///")), "-.mount");
+        assert_eq!(mount_unit_name(&Path::new("/"), ".mount"), "-.mount");
+        assert_eq!(mount_unit_name(&Path::new("//"), ".mount"), "-.mount");
+        assert_eq!(mount_unit_name(&Path::new("///"), ".mount"), "-.mount");
     }
 }
