@@ -10,36 +10,43 @@ use std::path::Path;
 use std::process::Command;
 use tempfile::TempDir;
 
-#[ctor::ctor]
-fn unshorn() {
-    use std::os::unix::fs::symlink;
-    use std::ptr;
+/// Inlined output from #[ctor::ctor] from the ctor crate, for Linux
+#[used]
+#[link_section = ".init_array"]
+static UNSHORN: extern "C" fn() = {
+    #[link_section = ".text.startup"]
+    extern "C" fn unshorn_inner() {
+        use std::os::unix::fs::symlink;
+        use std::ptr;
 
-    let (uid, gid) = unsafe { (libc::geteuid(), libc::getegid()) };
-    assert_eq!(
-        unsafe { libc::unshare(libc::CLONE_NEWUSER | libc::CLONE_NEWNS) },
-        0,
-        "Unshare failed. Are unprivileged userns on?"
-    );
-    fs::write("/proc/self/setgroups", b"deny").unwrap();
-    fs::write("/proc/self/uid_map", format!("0 {} 1", uid)).unwrap();
-    fs::write("/proc/self/gid_map", format!("0 {} 1", gid)).unwrap();
+        let (uid, gid) = unsafe { (libc::geteuid(), libc::getegid()) };
+        assert_eq!(
+            unsafe { libc::unshare(libc::CLONE_NEWUSER | libc::CLONE_NEWNS) },
+            0,
+            "Unshare failed. Are unprivileged userns on?"
+        );
+        fs::write("/proc/self/setgroups", b"deny").unwrap();
+        fs::write("/proc/self/uid_map", format!("0 {} 1", uid)).unwrap();
+        fs::write("/proc/self/gid_map", format!("0 {} 1", gid)).unwrap();
 
-    assert_eq!(
-        unsafe {
-            libc::mount(
-                ptr::null(),
-                b"/proc\0".as_ptr() as *const i8,
-                b"tmpfs\0".as_ptr() as *const i8,
-                0,
-                ptr::null(),
-            )
-        },
-        0
-    );
-    fs::create_dir("/proc/self").unwrap();
-    symlink("zram-generator", "/proc/self/exe").unwrap();
-}
+        assert_eq!(
+            unsafe {
+                libc::mount(
+                    ptr::null(),
+                    b"/proc\0".as_ptr() as *const i8,
+                    b"tmpfs\0".as_ptr() as *const i8,
+                    0,
+                    ptr::null(),
+                )
+            },
+            0
+        );
+        fs::create_dir("/proc/self").unwrap();
+        symlink("zram-generator", "/proc/self/exe").unwrap();
+    }
+
+    unshorn_inner
+};
 
 fn prepare_directory(srcroot: &Path) -> Result<TempDir> {
     let rootdir = TempDir::new()?;

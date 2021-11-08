@@ -24,7 +24,6 @@ fasteval = { version = "0.2", default-features = false }
 tempfile = "3"
 fs_extra = "1.1"
 libc = { version = "0.2", default-features = false }
-ctor = "0.1"
 
 [profile.release]
 lto = "thin"
