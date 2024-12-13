@@ -67,11 +67,11 @@ pub fn run_device_setup(device: Option<Device>, device_name: &str) -> Result<()>
         match fs::write(&path, data) {
             Ok(_) => {
                 if let Some((add_path, add_data)) = add_pathdata {
-                    match fs::write(add_path, add_data) {
+                    match fs::write(add_path, &add_data) {
                         Ok(_) => {}
                         Err(err) => {
                             warn!(
-                                "Warning: algorithm {algo:?} supplemental data {data:?} not written: {err}",
+                                "Warning: algorithm {algo:?} supplemental data {add_data:?} not written: {err}",
                             );
                         }
                     }
